@@ -138,6 +138,15 @@ test("token bucket blocks burst over limit", async () => {
   assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000)).allowed, false);
 });
 
+test("token bucket refills over time", async () => {
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:refill", 1, 10)).allowed, true);
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:refill", 1, 10)).allowed, false);
+
+  await new Promise((resolve) => setTimeout(resolve, 15));
+
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:refill", 1, 10)).allowed, true);
+});
+
 test("sliding window expires old requests", async () => {
   assert.equal((await checkSlidingWindow("rate:ip:127.0.0.1:search", 1, 10)).allowed, true);
   await new Promise((resolve) => setTimeout(resolve, 15));
