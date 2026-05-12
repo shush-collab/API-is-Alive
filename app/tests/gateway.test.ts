@@ -3,7 +3,9 @@ import { createServer, type Server } from "node:http";
 import test, { beforeEach, after } from "node:test";
 import { createApp } from "../apps/gateway/src/app";
 import { config } from "../apps/gateway/src/config";
+import { requestEventsQueue } from "../apps/gateway/src/services/eventQueue";
 import { connectMongo, disconnectMongo, mongo } from "../apps/gateway/src/services/mongo";
+import { getQueueStats } from "../apps/gateway/src/services/queueStats";
 import { redis, redisClient } from "../apps/gateway/src/services/redis";
 import { resetSlidingWindows } from "../apps/gateway/src/services/slidingWindow";
 import { checkTokenBucket } from "../apps/gateway/src/services/tokenBucket";
@@ -12,6 +14,7 @@ import { checkSlidingWindow } from "../apps/gateway/src/services/slidingWindow";
 const resetState = async () => {
   await redis.reset();
   await mongo.reset();
+  await requestEventsQueue.obliterate({ force: true });
   await resetSlidingWindows();
 };
 
@@ -91,6 +94,7 @@ beforeEach(async () => {
 
 after(async () => {
   await disconnectMongo();
+  await requestEventsQueue.close();
   redisClient.disconnect();
 });
 
@@ -143,19 +147,16 @@ test("normal traffic is allowed", async () => {
   }
 });
 
-test("credential stuffing becomes TEMP_BLOCK", async () => {
+test("cached high risk becomes TEMP_BLOCK", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
-    let finalResponse: Response | undefined;
-    for (let index = 0; index < 20; index += 1) {
-      finalResponse = await request(gateway.url, "/login", {
-        method: "POST",
-        body: JSON.stringify({ email: `user${index}@example.com`, password: "wrong" }),
-        headers: { "x-forwarded-for": "203.0.113.20", "x-api-key": "stuffing-key" },
-      });
-    }
-    assert.equal(finalResponse?.headers.get("x-gateway-decision"), "TEMP_BLOCK");
+    await redis.setNumber("risk:key:stuffing-key", 80);
+    const response = await request(gateway.url, "/search?q=keyboard", {
+      headers: { "x-forwarded-for": "203.0.113.20", "x-api-key": "stuffing-key" },
+    });
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get("x-gateway-decision"), "TEMP_BLOCK");
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -207,7 +208,8 @@ test("request event is pushed to queue", async () => {
   const gateway = await startGateway(fake.url);
   try {
     await request(gateway.url, "/search?q=keyboard");
-    assert.equal(await redis.queueLength("events:queue"), 1);
+    const stats = await getQueueStats();
+    assert.equal(stats.waiting, 1);
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -233,20 +235,20 @@ test("admin stats endpoint returns data", async () => {
   }
 });
 
-test("integration: credential stuffing final risk score is at least 80", async () => {
+test("credential stuffing requests are labeled for worker scoring", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
-    let risk = 0;
-    for (let index = 0; index < 20; index += 1) {
-      const response = await request(gateway.url, "/login", {
+    for (let index = 0; index < 6; index += 1) {
+      await request(gateway.url, "/login", {
         method: "POST",
         body: JSON.stringify({ email: `bot${index}@example.com`, password: "wrong" }),
         headers: { "x-forwarded-for": "203.0.113.40", "x-api-key": "integration-stuffing-key" },
       });
-      risk = Number(response.headers.get("x-risk-score") ?? 0);
     }
-    assert(risk >= 80);
+
+    const events = await mongo.listRequestEvents(1);
+    assert.deepEqual(events[0]?.reasons, ["login_failed", "login_failures_gt_5"]);
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);

@@ -1,4 +1,4 @@
-import { Schema, model } from "mongoose";
+import { Schema, model, models } from "mongoose";
 
 const riskProfileSchema = new Schema(
   {
@@ -35,4 +35,4 @@ const riskProfileSchema = new Schema(
 riskProfileSchema.index({ subjectType: 1, subject: 1 }, { unique: true });
 riskProfileSchema.index({ score: -1 });
 
-export const RiskProfileModel = model("RiskProfile", riskProfileSchema);
+export const RiskProfileModel = models.RiskProfile ?? model("RiskProfile", riskProfileSchema);

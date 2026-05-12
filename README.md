@@ -2,9 +2,9 @@
 
 API is Alive is a TypeScript monorepo for a defensive API gateway demo. It includes:
 
-- `gateway`: Express gateway with request logging, authentication, rate limiting, risk checks, and upstream proxying.
+- `gateway`: Express gateway that reads cached risk, rate limits requests, proxies or blocks traffic, stores request events, and emits BullMQ jobs.
 - `fake-api`: Small demo upstream API with `health`, `login`, `search`, and `checkout` routes.
-- `worker`: Background risk-scoring worker.
+- `worker`: BullMQ worker that consumes request events and performs async risk updates in Redis and MongoDB.
 - `dashboard`: Vite/React dashboard.
 - `replay`: Scenario runner for normal and suspicious traffic patterns.
 

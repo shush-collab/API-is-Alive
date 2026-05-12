@@ -1,6 +1,6 @@
 # Sentinel Gateway
 
-Monorepo scaffold for an API gateway demo. The fake API is intentionally simple and exposes only:
+Monorepo scaffold for an API gateway demo. The gateway reads cached risk and emits request events; the worker performs async risk updates. The fake API is intentionally simple and exposes only:
 
 ```text
 GET /health

@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { mongo } from "../services/mongo";
-import { redis } from "../services/redis";
+import { getQueueStats } from "../services/queueStats";
 
 export const adminRouter = Router();
 
 adminRouter.get("/stats", async (_req, res) => {
-  res.json({ ...(await mongo.stats()), queueLag: await redis.queueLength("events:queue") });
+  const queue = await getQueueStats();
+  res.json({ ...(await mongo.stats()), queueLag: queue.waiting + queue.active + queue.delayed });
 });
 
 adminRouter.get("/events", async (req, res) => {
@@ -29,5 +30,5 @@ adminRouter.post("/risk-profiles/:subject/unblock", async (req, res) => {
 });
 
 adminRouter.get("/queue", async (_req, res) => {
-  res.json({ queue: "events:queue", lag: await redis.queueLength("events:queue") });
+  res.json(await getQueueStats());
 });
