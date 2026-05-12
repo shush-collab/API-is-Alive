@@ -1,39 +1,123 @@
-# Sentinel Gateway
+# Sentinel Gateway App
 
-Monorepo scaffold for an API gateway demo. The gateway reads cached risk and emits request events; the worker performs async risk updates. The fake API is intentionally simple and exposes only:
+This directory contains the runnable monorepo for API is Alive.
+
+## Workspaces
 
 ```text
-GET /health
-POST /login
-GET /search?q=keyboard
-POST /checkout
+apps/gateway     Express gateway and admin API
+apps/fake-api    Demo upstream API
+apps/worker      BullMQ risk scoring worker
+apps/dashboard   React dashboard backed by live admin endpoints
+apps/replay      Traffic replay scenarios
+packages/shared  Shared TypeScript types
 ```
 
-## Setup
+## Docker Flow
+
+Run everything:
+
+```bash
+docker compose up --build
+```
+
+Seed demo API keys after MongoDB is up:
+
+```bash
+docker compose exec gateway npm run seed
+```
+
+Stop cleanly:
+
+```bash
+docker compose down
+```
+
+Reset local Docker data:
+
+```bash
+docker compose down -v
+```
+
+Docker starts MongoDB and Redis with health checks. The gateway and worker wait for healthy infrastructure before starting.
+
+## Local Flow
+
+Install:
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-## Run Fake API
+Start these in separate terminals:
 
 ```bash
 npm run fake-api:dev
-```
-
-## Run Gateway
-
-```bash
 npm run gateway:dev
+npm run worker:dev
+npm --workspace apps/dashboard run dev
 ```
 
-## Seed Demo Keys
+Seed API keys:
 
 ```bash
 npm run seed
 ```
 
-Replay and manual gateway requests can use `demo-free-key`. Admin routes require `x-admin-token: dev-admin-token`.
+## Default Credentials
 
-See `docs/architecture.md` for the repo layout.
+Gateway requests:
+
+```text
+x-api-key: demo-free-key
+```
+
+Admin requests:
+
+```text
+x-admin-token: dev-admin-token
+```
+
+Dashboard env:
+
+```text
+VITE_GATEWAY_URL=http://localhost:4000
+VITE_ADMIN_TOKEN=dev-admin-token
+```
+
+## Scripts
+
+```bash
+npm run fake-api:dev
+npm run fake-api:build
+npm run gateway:dev
+npm run gateway:build
+npm run worker:dev
+npm run seed
+npm run replay:normal
+npm run replay:scraper
+npm run replay:credential-stuffing
+npm run replay:suspicious
+npm test
+```
+
+`npm test` uses `sentinel_test` and Redis DB `15` so it does not wipe the development or Docker queue state.
+
+## Useful Admin Calls
+
+```bash
+curl http://localhost:4000/admin/stats \
+  -H "x-admin-token: dev-admin-token"
+
+curl http://localhost:4000/admin/events?limit=5 \
+  -H "x-admin-token: dev-admin-token"
+
+curl http://localhost:4000/admin/risk-profiles \
+  -H "x-admin-token: dev-admin-token"
+
+curl http://localhost:4000/admin/queue \
+  -H "x-admin-token: dev-admin-token"
+```
+
+See `docs/architecture.md` for the request path and service boundaries.
