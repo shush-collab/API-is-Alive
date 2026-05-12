@@ -18,7 +18,7 @@
     "replay:credential-stuffing": "npm --workspace apps/replay run credential-stuffing",
     "replay:suspicious": "npm --workspace apps/replay run suspicious",
     "seed": "npm --workspace apps/gateway run seed",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "MONGO_URL=mongodb://localhost:27017/sentinel_test REDIS_URL=redis://localhost:6379/15 tsx --test tests/*.test.ts"
   },
   "keywords": [
     "gateway",

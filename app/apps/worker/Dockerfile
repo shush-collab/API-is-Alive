@@ -6,12 +6,14 @@ COPY package*.json ./
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 COPY tsconfig.json ./tsconfig.json
 COPY apps/worker ./apps/worker
 COPY packages/shared ./packages/shared
 
+RUN npm --workspace apps/worker run build
+
 WORKDIR /app/apps/worker
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]
