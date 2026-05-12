@@ -9,10 +9,25 @@ let connected = false;
 export const connectMongo = async () => {
   if (connected) return;
 
-  await mongoose.connect(config.mongoUrl);
-  connected = true;
+  const maxAttempts = 20;
+  const delayMs = 1000;
 
-  console.log("[mongo] connected");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await mongoose.connect(config.mongoUrl);
+      connected = true;
+      console.log("[mongo] connected");
+      return;
+    } catch (error) {
+      console.error(`[mongo] connection attempt ${attempt}/${maxAttempts} failed`);
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 };
 
 export const disconnectMongo = async () => {

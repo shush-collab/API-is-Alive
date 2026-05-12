@@ -69,3 +69,24 @@ export const redis = {
     await redisClient.flushdb();
   },
 };
+
+export const connectRedis = async () => {
+  const maxAttempts = 20;
+  const delayMs = 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await redisClient.ping();
+      console.log("[redis] ready");
+      return;
+    } catch (error) {
+      console.error(`[redis] connection attempt ${attempt}/${maxAttempts} failed`);
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+};
