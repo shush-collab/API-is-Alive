@@ -1,6 +1,6 @@
 const baseUrl = process.env.GATEWAY_URL ?? "http://localhost:4000";
 const scenarioName = process.argv[2] ?? "normal";
-const scenarioApiKey = `replay-${scenarioName}`;
+const scenarioApiKey = process.env.API_KEY ?? "demo-free-key";
 const scenarioIp = `10.0.0.${Math.abs([...scenarioName].reduce((sum, char) => sum + char.charCodeAt(0), 0)) % 200 + 1}`;
 
 export type ReplayResult = {

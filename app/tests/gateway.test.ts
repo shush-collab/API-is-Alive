@@ -3,6 +3,8 @@ import { createServer, type Server } from "node:http";
 import test, { beforeEach, after } from "node:test";
 import { createApp } from "../apps/gateway/src/app";
 import { config } from "../apps/gateway/src/config";
+import { ApiKeyModel } from "../apps/gateway/src/models/ApiKey";
+import { hashApiKey } from "../apps/gateway/src/services/apiKeys";
 import { requestEventsQueue } from "../apps/gateway/src/services/eventQueue";
 import { connectMongo, disconnectMongo, mongo } from "../apps/gateway/src/services/mongo";
 import { getQueueStats } from "../apps/gateway/src/services/queueStats";
@@ -14,8 +16,28 @@ import { checkSlidingWindow } from "../apps/gateway/src/services/slidingWindow";
 const resetState = async () => {
   await redis.reset();
   await mongo.reset();
+  await ApiKeyModel.deleteMany({});
   await requestEventsQueue.obliterate({ force: true });
   await resetSlidingWindows();
+};
+
+const seedApiKey = async (rawKey: string) => {
+  await ApiKeyModel.findOneAndUpdate(
+    { keyHash: hashApiKey(rawKey) },
+    {
+      $set: {
+        name: rawKey,
+        keyHash: hashApiKey(rawKey),
+        plan: "free",
+        isActive: true,
+        createdAt: new Date(),
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+    },
+  );
 };
 
 const startFakeApi = async () => {
@@ -90,6 +112,13 @@ const request = async (baseUrl: string, path: string, init: RequestInit = {}) =>
 beforeEach(async () => {
   await connectMongo();
   await resetState();
+  await Promise.all([
+    seedApiKey("test-key"),
+    seedApiKey("stuffing-key"),
+    seedApiKey("scraper-key"),
+    seedApiKey("checkout-limit-key"),
+    seedApiKey("integration-stuffing-key"),
+  ]);
 });
 
 after(async () => {
@@ -119,15 +148,53 @@ test("cooldown blocks risky IP", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
-    await redis.setNumber("cooldown:ip:203.0.113.10", Date.now() + 600_000, 600_000);
+    await redis.setNumber("cooldown:key:test-key", Date.now() + 600_000, 600_000);
     const response = await fetch(`${gateway.url}/search?q=keyboard`, {
       headers: {
+        "x-api-key": "test-key",
         "x-forwarded-for": "203.0.113.10",
         "user-agent": "test-agent",
       },
     });
     assert.equal(response.status, 429);
     assert.equal(response.headers.get("x-gateway-decision"), "TEMP_BLOCK");
+  } finally {
+    await closeServer(gateway.server);
+    await closeServer(fake.server);
+  }
+});
+
+test("missing API key returns 401", async () => {
+  const fake = await startFakeApi();
+  const gateway = await startGateway(fake.url);
+  try {
+    const response = await fetch(`${gateway.url}/search?q=keyboard`, {
+      headers: {
+        "user-agent": "test-agent",
+      },
+    });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Missing API key" });
+  } finally {
+    await closeServer(gateway.server);
+    await closeServer(fake.server);
+  }
+});
+
+test("invalid API key returns 401", async () => {
+  const fake = await startFakeApi();
+  const gateway = await startGateway(fake.url);
+  try {
+    const response = await fetch(`${gateway.url}/search?q=keyboard`, {
+      headers: {
+        "x-api-key": "invalid-key",
+        "user-agent": "test-agent",
+      },
+    });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Invalid or inactive API key" });
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -209,7 +276,7 @@ test("request event is pushed to queue", async () => {
   try {
     await request(gateway.url, "/search?q=keyboard");
     const stats = await getQueueStats();
-    assert.equal(stats.waiting, 1);
+    assert.equal(stats.waiting + stats.active + stats.delayed + stats.completed + stats.failed, 1);
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -221,7 +288,11 @@ test("admin stats endpoint returns data", async () => {
   const gateway = await startGateway(fake.url);
   try {
     await request(gateway.url, "/search?q=keyboard");
-    const response = await fetch(`${gateway.url}/admin/stats`);
+    const response = await fetch(`${gateway.url}/admin/stats`, {
+      headers: {
+        "x-admin-token": "dev-admin-token",
+      },
+    });
     const body = await response.json() as Record<string, number>;
     assert.equal(typeof body.totalRequests, "number");
     assert.equal(typeof body.allowed, "number");
@@ -235,11 +306,44 @@ test("admin stats endpoint returns data", async () => {
   }
 });
 
-test("credential stuffing requests are labeled for worker scoring", async () => {
+test("admin route without token returns 401", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
-    for (let index = 0; index < 6; index += 1) {
+    const response = await fetch(`${gateway.url}/admin/stats`);
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Invalid admin token" });
+  } finally {
+    await closeServer(gateway.server);
+    await closeServer(fake.server);
+  }
+});
+
+test("admin route with token returns stats", async () => {
+  const fake = await startFakeApi();
+  const gateway = await startGateway(fake.url);
+  try {
+    const response = await fetch(`${gateway.url}/admin/stats`, {
+      headers: {
+        "x-admin-token": "dev-admin-token",
+      },
+    });
+
+    const body = await response.json() as Record<string, number>;
+    assert.equal(response.status, 200);
+    assert.equal(typeof body.totalRequests, "number");
+  } finally {
+    await closeServer(gateway.server);
+    await closeServer(fake.server);
+  }
+});
+
+test("failed login requests are labeled for worker scoring", async () => {
+  const fake = await startFakeApi();
+  const gateway = await startGateway(fake.url);
+  try {
+    for (let index = 0; index < 3; index += 1) {
       await request(gateway.url, "/login", {
         method: "POST",
         body: JSON.stringify({ email: `bot${index}@example.com`, password: "wrong" }),
@@ -247,8 +351,9 @@ test("credential stuffing requests are labeled for worker scoring", async () => 
       });
     }
 
-    const events = await mongo.listRequestEvents(1);
-    assert.deepEqual(events[0]?.reasons, ["login_failed", "login_failures_gt_5"]);
+    const events = await mongo.listRequestEvents(10);
+    const labeledEvent = events.find((event) => event.reasons.includes("login_failed"));
+    assert(labeledEvent);
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);

@@ -28,4 +28,12 @@ npm run fake-api:dev
 npm run gateway:dev
 ```
 
+## Seed Demo Keys
+
+```bash
+npm run seed
+```
+
+Replay and manual gateway requests can use `demo-free-key`. Admin routes require `x-admin-token: dev-admin-token`.
+
 See `docs/architecture.md` for the repo layout.

@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { adminAuth } from "./middleware/adminAuth";
 import { auth } from "./middleware/auth";
 import { decision } from "./middleware/decision";
 import { rateLimit } from "./middleware/rateLimit";
@@ -22,7 +23,7 @@ export const createApp = () => {
     next();
   });
 
-  app.use("/admin", adminRouter);
+  app.use("/admin", adminAuth, adminRouter);
   app.use(auth, riskCheck, rateLimit, decision, proxyRouter);
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("[gateway] unhandled error", error);

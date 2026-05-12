@@ -17,6 +17,7 @@
     "replay:scraper": "npm --workspace apps/replay run scraper",
     "replay:credential-stuffing": "npm --workspace apps/replay run credential-stuffing",
     "replay:suspicious": "npm --workspace apps/replay run suspicious",
+    "seed": "npm --workspace apps/gateway run seed",
     "test": "tsx --test tests/*.test.ts"
   },
   "keywords": [

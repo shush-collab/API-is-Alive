@@ -10,6 +10,8 @@ services:
       UPSTREAM_URL: http://fake-api:5000
       MONGO_URL: mongodb://mongo:27017/sentinel
       REDIS_URL: redis://redis:6379
+      ADMIN_TOKEN: dev-admin-token
+      API_KEY_PEPPER: dev-api-key-pepper
     depends_on:
       mongo:
         condition: service_healthy

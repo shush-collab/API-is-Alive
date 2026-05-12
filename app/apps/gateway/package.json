@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/server.ts",
+    "seed": "tsx src/seed.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {

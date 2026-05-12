@@ -96,15 +96,47 @@ npm --workspace apps/dashboard run dev
 
 The dashboard runs at `http://localhost:3000`, the gateway at `http://localhost:4000`, and the fake API at `http://localhost:5000`.
 
+Seed demo API keys before replaying traffic against a fresh database:
+
+```bash
+npm run seed
+```
+
+Demo keys:
+
+- `demo-free-key`
+- `demo-pro-key`
+
 ## Replay Traffic
 
 After the fake API and gateway are running, replay demo scenarios:
 
 ```bash
+npm run seed
 npm run replay:normal
 npm run replay:scraper
 npm run replay:credential-stuffing
 npm run replay:suspicious
+```
+
+Gateway requests require an API key:
+
+```bash
+curl -i "http://localhost:4000/search?q=keyboard" \
+  -H "x-api-key: demo-free-key"
+```
+
+Admin routes require the admin token:
+
+```bash
+curl http://localhost:4000/admin/stats \
+  -H "x-admin-token: dev-admin-token"
+curl http://localhost:4000/admin/events \
+  -H "x-admin-token: dev-admin-token"
+curl http://localhost:4000/admin/risk-profiles \
+  -H "x-admin-token: dev-admin-token"
+curl http://localhost:4000/admin/queue \
+  -H "x-admin-token: dev-admin-token"
 ```
 
 ## Tests
