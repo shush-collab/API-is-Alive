@@ -11,9 +11,9 @@ export const scoreToDecision = (score: number): GatewayDecision => {
   return "ALLOW";
 };
 
-export const readRisk = (riskKey: string) => redis.getNumber(riskKey);
+export const readRisk = async (riskKey: string) => redis.getNumber(riskKey);
 
-export const applyRiskDelta = ({
+export const applyRiskDelta = async ({
   riskKey,
   cooldownKey,
   baseScore,
@@ -27,7 +27,7 @@ export const applyRiskDelta = ({
   reasons: string[];
   subjectType: "ip" | "apiKey";
   subject: string;
-}): RiskProfile => {
+}): Promise<RiskProfile> => {
   const delta = reasons.reduce((sum, reason) => {
     if (reason === "login_failed") return sum + 25;
     if (reason === "login_failures_gt_5") return sum + 15;
@@ -41,7 +41,7 @@ export const applyRiskDelta = ({
   }, 0);
 
   const score = clampRisk(baseScore + delta);
-  redis.setNumber(riskKey, score);
+  await redis.setNumber(riskKey, score);
 
   const profile: RiskProfile = {
     subjectType,
@@ -53,7 +53,7 @@ export const applyRiskDelta = ({
 
   if (score >= 80) {
     const blockedUntil = new Date(Date.now() + config.cooldownMs);
-    redis.setNumber(cooldownKey, blockedUntil.getTime(), config.cooldownMs);
+    await redis.setNumber(cooldownKey, blockedUntil.getTime(), config.cooldownMs);
     profile.blockedUntil = blockedUntil;
   }
 

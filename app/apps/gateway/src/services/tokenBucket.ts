@@ -8,8 +8,12 @@ export type LimitResult = {
   key: string;
 };
 
-export const checkTokenBucket = (key: string, limit: number, windowMs: number): LimitResult => {
-  const used = redis.incr(key, windowMs);
+export const checkTokenBucket = async (
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<LimitResult> => {
+  const used = await redis.incr(key, windowMs);
   const remaining = Math.max(0, limit - used);
 
   return {

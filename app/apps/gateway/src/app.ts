@@ -24,6 +24,13 @@ export const createApp = () => {
 
   app.use("/admin", adminRouter);
   app.use(auth, riskCheck, rateLimit, decision, proxyRouter);
+  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("[gateway] unhandled error", error);
+
+    res.status(500).json({
+      error: "Internal gateway error",
+    });
+  });
 
   return app;
 };

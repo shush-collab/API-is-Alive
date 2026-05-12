@@ -4,8 +4,8 @@ import { redis } from "../services/redis";
 
 export const adminRouter = Router();
 
-adminRouter.get("/stats", (_req, res) => {
-  res.json({ ...mongo.stats(), queueLag: redis.queueLength("events:queue") });
+adminRouter.get("/stats", async (_req, res) => {
+  res.json({ ...(await mongo.stats()), queueLag: await redis.queueLength("events:queue") });
 });
 
 adminRouter.get("/events", async (req, res) => {
@@ -28,6 +28,6 @@ adminRouter.post("/risk-profiles/:subject/unblock", async (req, res) => {
   res.json({ unblocked: true, subject: req.params.subject });
 });
 
-adminRouter.get("/queue", (_req, res) => {
-  res.json({ queue: "events:queue", lag: redis.queueLength("events:queue") });
+adminRouter.get("/queue", async (_req, res) => {
+  res.json({ queue: "events:queue", lag: await redis.queueLength("events:queue") });
 });

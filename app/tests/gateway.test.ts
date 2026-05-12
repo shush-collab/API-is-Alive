@@ -3,16 +3,16 @@ import { createServer, type Server } from "node:http";
 import test, { beforeEach, after } from "node:test";
 import { createApp } from "../apps/gateway/src/app";
 import { config } from "../apps/gateway/src/config";
-import { mongo } from "../apps/gateway/src/services/mongo";
-import { redis } from "../apps/gateway/src/services/redis";
+import { connectMongo, disconnectMongo, mongo } from "../apps/gateway/src/services/mongo";
+import { redis, redisClient } from "../apps/gateway/src/services/redis";
 import { resetSlidingWindows } from "../apps/gateway/src/services/slidingWindow";
 import { checkTokenBucket } from "../apps/gateway/src/services/tokenBucket";
 import { checkSlidingWindow } from "../apps/gateway/src/services/slidingWindow";
 
-const resetState = () => {
-  redis.reset();
-  mongo.reset();
-  resetSlidingWindows();
+const resetState = async () => {
+  await redis.reset();
+  await mongo.reset();
+  await resetSlidingWindows();
 };
 
 const startFakeApi = async () => {
@@ -84,32 +84,38 @@ const request = async (baseUrl: string, path: string, init: RequestInit = {}) =>
   },
 });
 
-beforeEach(() => {
-  resetState();
+beforeEach(async () => {
+  await connectMongo();
+  await resetState();
 });
 
-test("token bucket allows requests under limit", () => {
-  assert.equal(checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000).allowed, true);
-  assert.equal(checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000).allowed, true);
+after(async () => {
+  await disconnectMongo();
+  redisClient.disconnect();
 });
 
-test("token bucket blocks burst over limit", () => {
-  checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000);
-  checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000);
-  assert.equal(checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000).allowed, false);
+test("token bucket allows requests under limit", async () => {
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000)).allowed, true);
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000)).allowed, true);
+});
+
+test("token bucket blocks burst over limit", async () => {
+  await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000);
+  await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000);
+  assert.equal((await checkTokenBucket("rate:ip:127.0.0.1:global", 2, 60_000)).allowed, false);
 });
 
 test("sliding window expires old requests", async () => {
-  assert.equal(checkSlidingWindow("rate:ip:127.0.0.1:search", 1, 10).allowed, true);
+  assert.equal((await checkSlidingWindow("rate:ip:127.0.0.1:search", 1, 10)).allowed, true);
   await new Promise((resolve) => setTimeout(resolve, 15));
-  assert.equal(checkSlidingWindow("rate:ip:127.0.0.1:search", 1, 10).allowed, true);
+  assert.equal((await checkSlidingWindow("rate:ip:127.0.0.1:search", 1, 10)).allowed, true);
 });
 
 test("cooldown blocks risky IP", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
-    redis.setNumber("cooldown:ip:203.0.113.10", Date.now() + 600_000, 600_000);
+    await redis.setNumber("cooldown:ip:203.0.113.10", Date.now() + 600_000, 600_000);
     const response = await fetch(`${gateway.url}/search?q=keyboard`, {
       headers: {
         "x-forwarded-for": "203.0.113.10",
@@ -201,7 +207,7 @@ test("request event is pushed to queue", async () => {
   const gateway = await startGateway(fake.url);
   try {
     await request(gateway.url, "/search?q=keyboard");
-    assert.equal(redis.queueLength("events:queue"), 1);
+    assert.equal(await redis.queueLength("events:queue"), 1);
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);

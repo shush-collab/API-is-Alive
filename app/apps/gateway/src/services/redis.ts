@@ -1,74 +1,71 @@
-type Entry = {
-  value: number;
-  expiresAt?: number;
-};
+import Redis from "ioredis";
+import { config } from "../config";
 
-const counters = new Map<string, Entry>();
-const sets = new Map<string, { values: Set<string>; expiresAt?: number }>();
-const queues = new Map<string, unknown[]>();
+export const redisClient = new Redis(config.redisUrl, {
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true,
+});
 
-const now = () => Date.now();
+redisClient.on("connect", () => {
+  console.log("[redis] connected");
+});
 
-const expired = (expiresAt?: number) => expiresAt !== undefined && expiresAt <= now();
+redisClient.on("error", (error) => {
+  console.error("[redis] error", error);
+});
 
-const getEntry = (key: string) => {
-  const entry = counters.get(key);
-  if (!entry || expired(entry.expiresAt)) {
-    counters.delete(key);
-    return undefined;
-  }
-  return entry;
-};
+const ttlSeconds = (ttlMs: number) => Math.ceil(ttlMs / 1000);
 
 export const redis = {
-  getNumber(key: string) {
-    return getEntry(key)?.value ?? 0;
+  async getNumber(key: string) {
+    const value = await redisClient.get(key);
+    return value === null ? 0 : Number(value);
   },
 
-  setNumber(key: string, value: number, ttlMs?: number) {
-    counters.set(key, { value, expiresAt: ttlMs ? now() + ttlMs : undefined });
+  async setNumber(key: string, value: number, ttlMs?: number) {
+    if (ttlMs) {
+      await redisClient.set(key, String(value), "PX", ttlMs);
+      return;
+    }
+
+    await redisClient.set(key, String(value));
   },
 
-  incr(key: string, ttlMs: number) {
-    const entry = getEntry(key);
-    const value = (entry?.value ?? 0) + 1;
-    counters.set(key, { value, expiresAt: entry?.expiresAt ?? now() + ttlMs });
+  async incr(key: string, ttlMs: number) {
+    const value = await redisClient.incr(key);
+
+    if (value === 1) {
+      await redisClient.pexpire(key, ttlMs);
+    }
+
     return value;
   },
 
-  ttlMs(key: string) {
-    const entry = getEntry(key);
-    if (!entry?.expiresAt) return 0;
-    return Math.max(0, entry.expiresAt - now());
+  async ttlMs(key: string) {
+    const ttl = await redisClient.pttl(key);
+    return ttl > 0 ? ttl : 0;
   },
 
-  del(key: string) {
-    counters.delete(key);
-    sets.delete(key);
+  async del(key: string) {
+    await redisClient.del(key);
   },
 
-  addToSet(key: string, value: string, ttlMs: number) {
-    const existing = sets.get(key);
-    const current = existing && !expired(existing.expiresAt) ? existing : { values: new Set<string>(), expiresAt: now() + ttlMs };
-    current.values.add(value);
-    sets.set(key, current);
-    return current.values.size;
+  async addToSet(key: string, value: string, ttlMs: number) {
+    await redisClient.sadd(key, value);
+    await redisClient.expire(key, ttlSeconds(ttlMs));
+    return redisClient.scard(key);
   },
 
-  push(queueKey: string, value: unknown) {
-    const queue = queues.get(queueKey) ?? [];
-    queue.push(value);
-    queues.set(queueKey, queue);
-    return queue.length;
+  async push(queueKey: string, value: unknown) {
+    const length = await redisClient.rpush(queueKey, JSON.stringify(value));
+    return length;
   },
 
-  queueLength(queueKey: string) {
-    return queues.get(queueKey)?.length ?? 0;
+  async queueLength(queueKey: string) {
+    return redisClient.llen(queueKey);
   },
 
-  reset() {
-    counters.clear();
-    sets.clear();
-    queues.clear();
+  async reset() {
+    await redisClient.flushdb();
   },
 };

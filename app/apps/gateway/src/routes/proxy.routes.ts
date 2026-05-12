@@ -17,7 +17,7 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
 
   const subjectType = req.gateway.apiKey ? "apiKey" : "ip";
   const subject = req.gateway.apiKey ?? req.gateway.ip;
-  const profile = applyRiskDelta({
+  const profile = await applyRiskDelta({
     riskKey: req.gateway.riskKey,
     cooldownKey: req.gateway.cooldownKey,
     baseScore: req.gateway.riskScoreBefore,
@@ -45,7 +45,7 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
     createdAt: new Date(),
   };
 
-  redis.push("events:queue", event);
+  await redis.push("events:queue", event);
   await mongo.storeRequestEvent(event);
 
   res.setHeader("X-Gateway-Decision", req.gateway.decision);
@@ -77,7 +77,7 @@ proxyRouter.use(async (req, res) => {
 
   if (req.path.startsWith("/login") && proxied.statusCode === 401) {
     req.gateway.reasons.push("login_failed");
-    const failures = checkSlidingWindow(`fail:ip:${req.gateway.ip}:login`, 5, 60_000);
+    const failures = await checkSlidingWindow(`fail:ip:${req.gateway.ip}:login`, 5, 60_000);
     if (failures.used > 5) req.gateway.reasons.push("login_failures_gt_5");
   }
 
