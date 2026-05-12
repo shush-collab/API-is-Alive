@@ -38,7 +38,15 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
   };
 
   await mongo.storeRequestEvent(event);
-  await enqueueRequestEvent(event);
+
+  try {
+    await enqueueRequestEvent(event);
+  } catch (error) {
+    console.error("[gateway] failed to enqueue request event", {
+      requestId: event.requestId,
+      error,
+    });
+  }
 
   res.setHeader("X-Gateway-Decision", req.gateway.decision);
   res.setHeader("X-Risk-Score", String(req.gateway.riskScoreBefore));

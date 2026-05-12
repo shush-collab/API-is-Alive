@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { config } from "./config";
 import { processEvent } from "./processEvent";
 import { connectMongo, disconnectMongo } from "./services/mongo";
+import { redisClient } from "./services/redis";
 import type { RequestEvent } from "../../../packages/shared/src/types";
 
 const start = async () => {
@@ -13,9 +14,7 @@ const start = async () => {
       await processEvent(job.data);
     },
     {
-      connection: {
-        url: config.redisUrl,
-      },
+      connection: redisClient,
       concurrency: 5,
     },
   );
@@ -32,6 +31,7 @@ const start = async () => {
     console.log("[worker] shutting down");
     await worker.close();
     await disconnectMongo();
+    redisClient.disconnect();
     process.exit(0);
   };
 

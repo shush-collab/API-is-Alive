@@ -1,11 +1,9 @@
 import { Queue } from "bullmq";
-import { config } from "../config";
+import { redisClient } from "./redis";
 import type { RequestEvent } from "../types/shared";
 
 export const requestEventsQueue = new Queue<RequestEvent>("request-events", {
-  connection: {
-    url: config.redisUrl,
-  },
+  connection: redisClient,
 });
 
 export const enqueueRequestEvent = async (event: RequestEvent) => {

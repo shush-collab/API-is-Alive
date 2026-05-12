@@ -1,6 +1,6 @@
 import { config } from "./config";
 import { RiskProfileModel } from "./models/RiskProfile";
-import { clampRisk, riskDeltaFromReasons } from "./riskScorer";
+import { riskDeltaFromReasons } from "./riskScorer";
 import { redis } from "./services/redis";
 import type { RequestEvent, RiskProfile } from "../../../packages/shared/src/types";
 
@@ -8,11 +8,8 @@ export const processEvent = async (event: RequestEvent) => {
   const riskKey = event.apiKey ? `risk:key:${event.apiKey}` : `risk:ip:${event.ip}`;
   const cooldownKey = event.apiKey ? `cooldown:key:${event.apiKey}` : `cooldown:ip:${event.ip}`;
 
-  const baseScore = await redis.getNumber(riskKey);
   const delta = riskDeltaFromReasons(event.reasons);
-  const score = clampRisk(baseScore + delta);
-
-  await redis.setNumber(riskKey, score);
+  const score = await redis.addClamped(riskKey, delta, 0, 100);
 
   const profile: RiskProfile = {
     subjectType: event.subjectType,
