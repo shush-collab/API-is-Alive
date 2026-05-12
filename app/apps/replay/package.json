@@ -1,0 +1,16 @@
+{
+  "name": "@sentinel/replay",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "normal": "tsx src/replay.ts normal",
+    "scraper": "tsx src/replay.ts scraper",
+    "credential-stuffing": "tsx src/replay.ts credentialStuffing",
+    "suspicious": "tsx src/replay.ts suspicious"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

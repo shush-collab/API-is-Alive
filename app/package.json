@@ -1,0 +1,40 @@
+{
+  "name": "sentinel-gateway",
+  "version": "1.0.0",
+  "description": "Monorepo for a gateway demo with a simple fake API.",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "fake-api:dev": "npm --workspace apps/fake-api run dev",
+    "fake-api:build": "npm --workspace apps/fake-api run build",
+    "gateway:dev": "npm --workspace apps/gateway run dev",
+    "gateway:build": "npm --workspace apps/gateway run build",
+    "worker:dev": "npm --workspace apps/worker run dev",
+    "replay:normal": "npm --workspace apps/replay run normal",
+    "replay:scraper": "npm --workspace apps/replay run scraper",
+    "replay:credential-stuffing": "npm --workspace apps/replay run credential-stuffing",
+    "replay:suspicious": "npm --workspace apps/replay run suspicious",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "keywords": [
+    "gateway",
+    "fake-api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
