@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { applyRiskDelta } from "../services/decisionEngine";
+import { enqueueRequestEvent } from "../services/eventQueue";
 import { mongo } from "../services/mongo";
 import { proxyRequest } from "../services/proxy";
 import { redis } from "../services/redis";
@@ -15,7 +16,7 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
     reasons.push("normal_behavior");
   }
 
-  const subjectType = req.gateway.apiKey ? "apiKey" : "ip";
+  const subjectType: "ip" | "apiKey" = req.gateway.apiKey ? "apiKey" : "ip";
   const subject = req.gateway.apiKey ?? req.gateway.ip;
   const profile = await applyRiskDelta({
     riskKey: req.gateway.riskKey,
@@ -34,6 +35,8 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
     requestId: req.gateway.requestId,
     ip: req.gateway.ip,
     apiKey: req.gateway.apiKey,
+    subjectType,
+    subject,
     method: req.method,
     path: req.originalUrl,
     statusCode,
@@ -42,9 +45,11 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
     riskScoreAfter: req.gateway.riskScoreAfter,
     userAgent: req.gateway.userAgent,
     latencyMs,
+    reasons,
     createdAt: new Date(),
   };
 
+  await enqueueRequestEvent(event);
   await redis.push("events:queue", event);
   await mongo.storeRequestEvent(event);
 

@@ -9,6 +9,8 @@ export type RequestEvent = {
   requestId: string;
   ip: string;
   apiKey?: string;
+  subjectType: "ip" | "apiKey";
+  subject: string;
   method: string;
   path: string;
   statusCode: number;
@@ -17,6 +19,7 @@ export type RequestEvent = {
   riskScoreAfter?: number;
   userAgent?: string;
   latencyMs: number;
+  reasons: string[];
   createdAt: Date;
 };
 
