@@ -15,7 +15,7 @@ const makeEvent = (overrides: Partial<RequestEvent> = {}): RequestEvent => ({
   path: "/login",
   statusCode: 401,
   decision: "ALLOW",
-  riskScoreBefore: 0,
+  riskScoreAtDecision: 0,
   userAgent: "test",
   latencyMs: 10,
   reasons: ["login_failed"],

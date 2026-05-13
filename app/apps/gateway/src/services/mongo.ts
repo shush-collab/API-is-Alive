@@ -112,6 +112,10 @@ export const mongo = {
       decision: "TEMP_BLOCK",
     });
 
+    const authFailed = await RequestEventModel.countDocuments({
+      decision: { $in: ["AUTH_MISSING", "AUTH_INVALID"] },
+    });
+
     const latency = await RequestEventModel.aggregate([
       {
         $group: {
@@ -128,6 +132,7 @@ export const mongo = {
       allowed,
       rateLimited,
       blocked,
+      authFailed,
       avgLatencyMs,
     };
   },

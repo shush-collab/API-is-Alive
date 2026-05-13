@@ -184,7 +184,12 @@ test("missing API key returns 401", async () => {
     });
 
     assert.equal(response.status, 401);
+    assert.equal(response.headers.get("x-gateway-decision"), "AUTH_MISSING");
     assert.deepEqual(await response.json(), { error: "Missing API key" });
+
+    const events = await mongo.listRequestEvents(10);
+    assert.equal(events[0]?.decision, "AUTH_MISSING");
+    assert(events[0]?.reasons.includes("missing_api_key"));
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -203,7 +208,12 @@ test("invalid API key returns 401", async () => {
     });
 
     assert.equal(response.status, 401);
+    assert.equal(response.headers.get("x-gateway-decision"), "AUTH_INVALID");
     assert.deepEqual(await response.json(), { error: "Invalid or inactive API key" });
+
+    const events = await mongo.listRequestEvents(10);
+    assert.equal(events[0]?.decision, "AUTH_INVALID");
+    assert(events[0]?.reasons.includes("invalid_api_key"));
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);
@@ -307,6 +317,7 @@ test("admin stats endpoint returns data", async () => {
     assert.equal(typeof body.allowed, "number");
     assert.equal(typeof body.rateLimited, "number");
     assert.equal(typeof body.blocked, "number");
+    assert.equal(typeof body.authFailed, "number");
     assert.equal(typeof body.avgLatencyMs, "number");
     assert.equal(typeof body.queueLag, "number");
   } finally {

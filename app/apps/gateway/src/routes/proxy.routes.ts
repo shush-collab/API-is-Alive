@@ -1,8 +1,7 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
-import { enqueueRequestEvent } from "../services/eventQueue";
-import { mongo } from "../services/mongo";
 import { proxyRequest } from "../services/proxy";
+import { buildRequestEvent, storeAndEnqueueRequestEvent } from "../services/requestEvents";
 import { checkSlidingWindow } from "../services/slidingWindow";
 
 export const proxyRouter = Router();
@@ -14,39 +13,12 @@ const finalize = async (req: Request, res: Response, statusCode: number, body: u
     reasons.push("normal_behavior");
   }
 
-  const subjectType: "ip" | "apiKey" = req.gateway.apiKey ? "apiKey" : "ip";
-  const subject = req.gateway.apiKey ?? req.gateway.ip;
-  req.gateway.riskScoreAfter = req.gateway.riskScoreBefore;
-
-  const latencyMs = Date.now() - req.gateway.startedAt;
-  const event = {
-    requestId: req.gateway.requestId,
-    ip: req.gateway.ip,
-    apiKey: req.gateway.apiKey,
-    subjectType,
-    subject,
-    method: req.method,
-    path: req.originalUrl,
+  const event = buildRequestEvent(req, {
     statusCode,
-    decision: req.gateway.decision,
-    riskScoreBefore: req.gateway.riskScoreBefore,
-    riskScoreAfter: req.gateway.riskScoreAfter,
-    userAgent: req.gateway.userAgent,
-    latencyMs,
     reasons,
-    createdAt: new Date(),
-  };
+  });
 
-  await mongo.storeRequestEvent(event);
-
-  try {
-    await enqueueRequestEvent(event);
-  } catch (error) {
-    console.error("[gateway] failed to enqueue request event", {
-      requestId: event.requestId,
-      error,
-    });
-  }
+  await storeAndEnqueueRequestEvent(event);
 
   res.setHeader("X-Gateway-Decision", req.gateway.decision);
   res.setHeader("X-Risk-Score", String(req.gateway.riskScoreBefore));

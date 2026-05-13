@@ -1,12 +1,13 @@
 import { config } from "./config";
+import { RequestEventModel } from "./models/RequestEvent";
 import { RiskProfileModel } from "./models/RiskProfile";
 import { riskDeltaFromReasons } from "./riskScorer";
 import { redis } from "./services/redis";
 import type { RequestEvent, RiskProfile } from "../../../packages/shared/src/types";
 
 export const processEvent = async (event: RequestEvent) => {
-  const riskKey = event.apiKey ? `risk:key:${event.apiKey}` : `risk:ip:${event.ip}`;
-  const cooldownKey = event.apiKey ? `cooldown:key:${event.apiKey}` : `cooldown:ip:${event.ip}`;
+  const riskKey = event.subjectType === "apiKey" ? `risk:key:${event.subject}` : `risk:ip:${event.subject}`;
+  const cooldownKey = event.subjectType === "apiKey" ? `cooldown:key:${event.subject}` : `cooldown:ip:${event.subject}`;
 
   const delta = riskDeltaFromReasons(event.reasons);
   const score = await redis.addClamped(riskKey, delta, 0, 100);
@@ -36,6 +37,15 @@ export const processEvent = async (event: RequestEvent) => {
     {
       upsert: true,
       new: true,
+    },
+  );
+
+  await RequestEventModel.findOneAndUpdate(
+    { requestId: event.requestId },
+    {
+      $set: {
+        riskScoreAfterWorker: score,
+      },
     },
   );
 

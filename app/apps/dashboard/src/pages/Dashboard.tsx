@@ -12,7 +12,9 @@ import type { AdminStats, QueueStats, RequestEvent, RiskProfile } from "../types
 
 const decisionVariant = (decision: string) => {
   if (decision === "TEMP_BLOCK") return "destructive" as const;
-  if (decision === "RATE_LIMIT" || decision === "REQUIRE_STEP_UP") return "secondary" as const;
+  if (decision === "RATE_LIMIT" || decision === "REQUIRE_STEP_UP" || decision.startsWith("AUTH_")) {
+    return "secondary" as const;
+  }
   return "outline" as const;
 };
 
@@ -108,7 +110,7 @@ export const Dashboard = () => {
         existing.stepUp += 1;
       }
 
-      existing.risk = Math.max(existing.risk, event.riskScoreAfter ?? event.riskScoreBefore);
+      existing.risk = Math.max(existing.risk, event.riskScoreAfterWorker ?? event.riskScoreAtDecision);
 
       buckets.set(minute, existing);
     }
@@ -136,6 +138,11 @@ export const Dashboard = () => {
       label: "Blocked",
       value: stats?.blocked ?? 0,
       icon: Ban,
+    },
+    {
+      label: "Auth failures",
+      value: stats?.authFailed ?? 0,
+      icon: TriangleAlert,
     },
     {
       label: "Average latency",

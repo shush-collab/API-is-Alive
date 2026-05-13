@@ -3,13 +3,16 @@ export type GatewayDecision =
   | "ALLOW_BUT_LOG"
   | "RATE_LIMIT"
   | "TEMP_BLOCK"
-  | "REQUIRE_STEP_UP";
+  | "REQUIRE_STEP_UP"
+  | "AUTH_MISSING"
+  | "AUTH_INVALID";
 
 export type AdminStats = {
   totalRequests: number;
   allowed: number;
   rateLimited: number;
   blocked: number;
+  authFailed: number;
   avgLatencyMs: number;
   queueLag: number;
 };
@@ -24,8 +27,8 @@ export type RequestEvent = {
   path: string;
   statusCode: number;
   decision: GatewayDecision;
-  riskScoreBefore: number;
-  riskScoreAfter?: number;
+  riskScoreAtDecision: number;
+  riskScoreAfterWorker?: number;
   userAgent?: string;
   latencyMs: number;
   reasons: string[];

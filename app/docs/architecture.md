@@ -91,4 +91,6 @@ x-admin-token: <ADMIN_TOKEN>
 
 `docker-compose.yml` starts MongoDB and Redis with health checks. Gateway and worker wait for healthy infrastructure before starting.
 
+Compose also runs a one-shot `seed` service that creates demo API keys before the gateway starts. This makes `docker compose up --build` enough for the replay scripts to authenticate with `demo-free-key`.
+
 The TypeScript services are built in their images and run compiled JavaScript with `npm run start`, not `tsx` dev mode. This avoids runtime dev-server behavior inside containers and makes shutdown cleaner.

@@ -10,6 +10,7 @@ Docker handles this with:
 
 - MongoDB health check using `mongosh`.
 - Redis health check using `redis-cli ping`.
+- One-shot seed service for demo API keys.
 - `depends_on` conditions for gateway and worker.
 - Mongo connection retry in gateway and worker.
 - Redis readiness check in gateway.

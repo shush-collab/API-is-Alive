@@ -21,6 +21,8 @@ The gateway labels request events with reasons such as:
 
 ```text
 normal_behavior
+missing_api_key
+invalid_api_key
 login_failed
 login_failures_gt_5
 rate_above_70_percent
@@ -76,3 +78,14 @@ blockedUntil
 ```
 
 The dashboard and `/admin/risk-profiles` read these documents.
+
+## Event Risk Fields
+
+Request events store:
+
+```text
+riskScoreAtDecision
+riskScoreAfterWorker
+```
+
+`riskScoreAtDecision` is the cached score the gateway used when making the response decision. `riskScoreAfterWorker` is filled by the worker after async scoring completes.

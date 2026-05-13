@@ -18,7 +18,7 @@ export const createApp = () => {
   app.use(requestLogger);
   app.use((req, res, next) => {
     res.setHeader("X-Gateway-Decision", req.gateway.decision);
-    res.setHeader("X-Risk-Score", String(req.gateway.riskScoreAfter ?? req.gateway.riskScoreBefore));
+    res.setHeader("X-Risk-Score", String(req.gateway.riskScoreBefore));
     res.setHeader("X-RateLimit-Remaining", String(req.gateway.rateLimitRemaining));
     next();
   });

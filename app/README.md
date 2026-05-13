@@ -21,11 +21,7 @@ Run everything:
 docker compose up --build
 ```
 
-Seed demo API keys after MongoDB is up:
-
-```bash
-docker compose exec gateway npm run seed
-```
+Compose includes a one-shot `seed` service. Demo API keys are created automatically before the gateway starts.
 
 Stop cleanly:
 
@@ -85,6 +81,8 @@ Dashboard env:
 VITE_GATEWAY_URL=http://localhost:4000
 VITE_ADMIN_TOKEN=dev-admin-token
 ```
+
+The default admin token and API key pepper are for local development only. Set strong values before deployment.
 
 ## Scripts
 

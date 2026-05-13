@@ -9,7 +9,6 @@ export type GatewayContext = {
   riskKey: string;
   cooldownKey: string;
   riskScoreBefore: number;
-  riskScoreAfter?: number;
   decision: GatewayDecision;
   decisionReason?: string;
   rateLimitRemaining: number;

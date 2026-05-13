@@ -13,20 +13,14 @@ docker compose up --build
 Expected logs:
 
 ```text
+[seed] Demo Free Key: demo-free-key
 [mongo] connected
 [redis] ready
 Gateway running on http://localhost:4000
 [worker] started
 ```
 
-## 2. Seed API Keys
-
-In another terminal:
-
-```bash
-cd app
-docker compose exec gateway npm run seed
-```
+The one-shot Compose seed service creates demo keys automatically.
 
 Demo keys:
 
@@ -35,7 +29,7 @@ demo-free-key
 demo-pro-key
 ```
 
-## 3. Show Auth
+## 2. Show Auth
 
 Missing key:
 
@@ -64,7 +58,7 @@ X-Gateway-Decision: ALLOW
 X-Risk-Score: 0
 ```
 
-## 4. Show Live Dashboard
+## 3. Show Live Dashboard
 
 Open:
 
@@ -87,7 +81,7 @@ It sends:
 x-admin-token: dev-admin-token
 ```
 
-## 5. Replay Attacks
+## 4. Replay Attacks
 
 ```bash
 npm run replay:credential-stuffing
@@ -109,7 +103,7 @@ Worker logs should show processed jobs:
 [worker] completed ...
 ```
 
-## 6. Inspect Admin State
+## 5. Inspect Admin State
 
 ```bash
 curl http://localhost:4000/admin/stats \
@@ -129,7 +123,7 @@ Expected:
 - queue lag stays near `0`
 - risk profile score rises toward `100`
 
-## 7. Stop Cleanly
+## 6. Stop Cleanly
 
 ```bash
 docker compose down

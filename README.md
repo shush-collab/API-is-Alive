@@ -47,14 +47,7 @@ cd app
 docker compose up --build
 ```
 
-Docker builds the TypeScript services and starts MongoDB and Redis with health checks before starting the gateway and worker.
-
-In another terminal, seed demo API keys:
-
-```bash
-cd app
-docker compose exec gateway npm run seed
-```
+Docker builds the TypeScript services, starts MongoDB and Redis with health checks, runs a one-shot `seed` service for demo API keys, and then starts the gateway and worker.
 
 Open:
 
@@ -104,6 +97,8 @@ REDIS_URL=redis://localhost:6379
 ADMIN_TOKEN=dev-admin-token
 API_KEY_PEPPER=dev-api-key-pepper
 ```
+
+`dev-admin-token` and `dev-api-key-pepper` are local development defaults only. Set strong `ADMIN_TOKEN` and `API_KEY_PEPPER` values before using this outside a local demo.
 
 Start services in separate terminals from `app/`:
 

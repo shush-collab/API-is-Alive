@@ -9,6 +9,8 @@ export const riskDeltaFromReasons = (reasons: string[]) => {
     if (reason === "user_agent_changed_gt_3") return sum + 15;
     if (reason === "scraper_like_search") return sum + 20;
     if (reason === "checkout_spam") return sum + 30;
+    if (reason === "invalid_api_key") return sum + 15;
+    if (reason === "missing_api_key") return sum + 5;
     if (reason === "normal_behavior") return sum - 5;
     return sum;
   }, 0);
