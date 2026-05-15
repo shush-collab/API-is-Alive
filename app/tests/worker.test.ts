@@ -51,6 +51,15 @@ test("login_failed increases risk by 25", async () => {
   assert.equal(await redis.getNumber("risk:ip:203.0.113.99"), 25);
 });
 
+test("duplicate requestId is not scored twice", async () => {
+  const event = makeEvent({ requestId: "req_duplicate" });
+
+  await processEvent(event);
+  await processEvent(event);
+
+  assert.equal(await redis.getNumber("risk:ip:203.0.113.99"), 25);
+});
+
 test("login_failures_gt_5 adds 15", async () => {
   await processEvent(makeEvent({
     reasons: ["login_failed", "login_failures_gt_5"],

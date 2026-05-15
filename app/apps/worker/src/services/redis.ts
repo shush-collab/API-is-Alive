@@ -28,6 +28,11 @@ export const redis = {
     await redisClient.set(key, String(value));
   },
 
+  async setIfNotExists(key: string, value: number, ttlMs: number) {
+    const result = await redisClient.set(key, String(value), "PX", ttlMs, "NX");
+    return result === "OK";
+  },
+
   async addClamped(key: string, delta: number, min = 0, max = 100) {
     const result = await redisClient.eval(
       `
@@ -58,4 +63,25 @@ export const redis = {
 
     return Number(result);
   },
+};
+
+export const connectRedis = async () => {
+  const maxAttempts = 20;
+  const delayMs = 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await redisClient.ping();
+      console.log("[worker redis] ready");
+      return;
+    } catch (error) {
+      console.error(`[worker redis] connection attempt ${attempt}/${maxAttempts} failed`);
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 };

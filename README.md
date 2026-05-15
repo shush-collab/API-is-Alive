@@ -8,7 +8,7 @@ The application source lives in `app/`.
 
 - `apps/gateway`: Express gateway on port `4000`.
 - `apps/fake-api`: Small upstream API on port `5000`.
-- `apps/worker`: BullMQ worker that updates Redis risk state and Mongo risk profiles.
+- `apps/worker`: Kafka consumer that updates Redis risk state and Mongo risk profiles.
 - `apps/dashboard`: Vite/React dashboard on port `3000`.
 - `apps/replay`: Traffic scenario runner.
 - `packages/shared`: Shared TypeScript event and risk types.
@@ -23,15 +23,16 @@ Client
       -> applies Redis token bucket and sliding-window limits
       -> proxies or blocks the request
       -> stores RequestEvent in MongoDB
-      -> enqueues RequestEvent to BullMQ
+      -> publishes RequestEvent to Kafka topic request-events
           -> Worker
-              -> consumes RequestEvent
+              -> consumes request-events as consumer group risk-worker
+              -> skips duplicate request IDs using Redis
               -> applies risk delta atomically in Redis
               -> sets Redis cooldown when risk reaches block threshold
               -> upserts MongoDB RiskProfile
 ```
 
-MongoDB stores API keys, request events, and risk profiles. Redis stores live rate-limit state, cooldowns, user-agent sets, cached risk scores, and BullMQ queue data.
+MongoDB stores API keys, request events, and risk profiles. Redis stores live rate-limit state, cooldowns, user-agent sets, cached risk scores, and idempotency keys. Kafka stores the request-events stream consumed by the risk worker.
 
 ## Run With Docker
 
@@ -47,7 +48,7 @@ cd app
 docker compose up --build
 ```
 
-Docker builds the TypeScript services, starts MongoDB and Redis with health checks, runs a one-shot `seed` service for demo API keys, and then starts the gateway and worker.
+Docker builds the TypeScript services, starts MongoDB, Redis, and Kafka with health checks, runs a one-shot `seed` service for demo API keys, and then starts the gateway and worker.
 
 Open:
 
@@ -77,6 +78,7 @@ Requirements:
 - npm
 - MongoDB on `localhost:27017`
 - Redis on `localhost:6379`
+- Kafka on `localhost:9092`
 
 Install dependencies and create the local env file:
 
@@ -94,6 +96,10 @@ FAKE_API_PORT=5000
 UPSTREAM_URL=http://localhost:5000
 MONGO_URL=mongodb://localhost:27017/sentinel
 REDIS_URL=redis://localhost:6379
+KAFKA_BROKERS=localhost:9092
+KAFKA_REQUEST_EVENTS_TOPIC=request-events
+KAFKA_RISK_WORKER_GROUP_ID=risk-worker
+KAFKA_CLIENT_ID=api-is-alive
 ADMIN_TOKEN=dev-admin-token
 API_KEY_PEPPER=dev-api-key-pepper
 ```
@@ -122,7 +128,7 @@ Demo keys:
 
 ## Replay Traffic
 
-Run replay scenarios after the gateway, fake API, worker, MongoDB, and Redis are running:
+Run replay scenarios after the gateway, fake API, worker, MongoDB, Redis, and Kafka are running:
 
 ```bash
 cd app
@@ -172,6 +178,59 @@ curl http://localhost:4000/admin/queue \
   -H "x-admin-token: dev-admin-token"
 ```
 
+## Localhost Validation
+
+The stack has been validated with curl against `127.0.0.1` only.
+
+Functional checks:
+
+```bash
+curl -i "http://127.0.0.1:4000/search?q=keyboard"
+curl -i "http://127.0.0.1:4000/search?q=keyboard" \
+  -H "x-api-key: invalid-local-key"
+curl -i "http://127.0.0.1:4000/search?q=keyboard" \
+  -H "x-api-key: demo-free-key" \
+  -H "x-forwarded-for: 127.0.0.1"
+curl -i "http://127.0.0.1:4000/checkout" \
+  -H "x-api-key: demo-free-key" \
+  -H "content-type: application/json" \
+  --data '{"items":[{"productId":"prod_keyboard","quantity":1}]}'
+curl -i "http://127.0.0.1:4000/login" \
+  -H "x-api-key: demo-free-key" \
+  -H "content-type: application/json" \
+  --data '{"email":"bot@example.com","password":"wrong"}'
+```
+
+Expected behavior:
+
+- missing API key returns `401` with `X-Gateway-Decision: AUTH_MISSING`
+- invalid API key returns `401` with `X-Gateway-Decision: AUTH_INVALID`
+- normal search returns `200` with `X-Gateway-Decision: ALLOW`
+- checkout returns `201` until the checkout rate limit is hit
+- failed login is stored as a request event and the worker later writes `riskScoreAfterWorker`
+- `/admin/queue` reports Kafka `totalLag: 0` once the worker catches up
+
+Controlled localhost burst used for validation:
+
+```bash
+seq 1 120 | xargs -P 30 -I{} curl -sS -o /dev/null -D - \
+  "http://127.0.0.1:4000/search?q=burst-{}" \
+  -H "x-api-key: demo-pro-key" \
+  -H "x-forwarded-for: 127.0.10.10" \
+  -H "user-agent: curl-local-burst"
+```
+
+Observed result:
+
+```text
+30  -> 200 ALLOW
+18  -> 429 RATE_LIMIT
+72  -> 429 TEMP_BLOCK
+Kafka high watermark = committed offset
+Kafka lag = 0
+RiskProfile demo-pro-key score = 100
+```
+
 ## Tests
 
 The test command uses isolated local test stores:
@@ -188,11 +247,11 @@ MONGO_URL=mongodb://localhost:27017/sentinel_test
 REDIS_URL=redis://localhost:6379/15
 ```
 
-Start local MongoDB and Redis first, or run only infrastructure from Compose:
+Start local MongoDB, Redis, and Kafka first, or run only infrastructure from Compose:
 
 ```bash
 cd app
-docker compose up -d mongo redis
+docker compose up -d mongo redis kafka
 npm test
 docker compose down
 ```

@@ -353,29 +353,54 @@ export const Dashboard = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Queue health</CardTitle>
-                <CardDescription>BullMQ request-events queue</CardDescription>
+                <CardDescription>Kafka request-events consumer lag</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2 text-sm">
-                <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-                  <span className="text-muted-foreground">Waiting</span>
-                  <span className="font-mono font-semibold">{queue?.waiting ?? 0}</span>
+              <CardContent className="grid gap-4 text-sm">
+                <div className="grid gap-2 md:grid-cols-4">
+                  <div className="rounded-md bg-muted/50 px-3 py-2">
+                    <div className="text-muted-foreground">Backend</div>
+                    <div className="font-mono font-semibold">{queue?.backend ?? "kafka"}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/50 px-3 py-2">
+                    <div className="text-muted-foreground">Topic</div>
+                    <div className="font-mono font-semibold">{queue?.topic ?? "request-events"}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/50 px-3 py-2">
+                    <div className="text-muted-foreground">Consumer Group</div>
+                    <div className="font-mono font-semibold">{queue?.groupId ?? "risk-worker"}</div>
+                  </div>
+                  <div className="rounded-md bg-muted/50 px-3 py-2">
+                    <div className="text-muted-foreground">Total Lag</div>
+                    <div className="font-mono font-semibold">{queue?.totalLag ?? 0}</div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-                  <span className="text-muted-foreground">Active</span>
-                  <span className="font-mono font-semibold">{queue?.active ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-                  <span className="text-muted-foreground">Delayed</span>
-                  <span className="font-mono font-semibold">{queue?.delayed ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-                  <span className="text-muted-foreground">Completed</span>
-                  <span className="font-mono font-semibold">{queue?.completed ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-                  <span className="text-muted-foreground">Failed</span>
-                  <span className="font-mono font-semibold">{queue?.failed ?? 0}</span>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Partition</TableHead>
+                      <TableHead>High Watermark</TableHead>
+                      <TableHead>Committed Offset</TableHead>
+                      <TableHead>Lag</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {queue?.partitions.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-muted-foreground">
+                          No partition offsets reported yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {queue?.partitions.map((partition) => (
+                      <TableRow key={partition.partition}>
+                        <TableCell className="font-mono">{partition.partition}</TableCell>
+                        <TableCell className="font-mono">{partition.highWatermark}</TableCell>
+                        <TableCell className="font-mono">{partition.committedOffset}</TableCell>
+                        <TableCell className="font-mono">{partition.lag}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>

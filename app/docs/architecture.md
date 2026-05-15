@@ -12,7 +12,7 @@ apps/fake-api
   Demo upstream API used by the gateway.
 
 apps/worker
-  BullMQ worker that consumes request events and updates risk state.
+  Kafka consumer that consumes request events and updates risk state.
 
 apps/dashboard
   React dashboard that polls live admin endpoints.
@@ -35,7 +35,7 @@ Client
   -> decision from cached Redis risk score
   -> proxy, block, or step-up response
   -> MongoDB RequestEvent insert
-  -> BullMQ request-events enqueue
+  -> Kafka request-events publish
   -> response to client
 ```
 
@@ -44,15 +44,44 @@ The gateway does not calculate the new risk score inside the request path. It re
 ## Worker Flow
 
 ```text
-BullMQ request-events job
+Kafka request-events topic
+  -> risk-worker consumer group
+  -> Redis idempotency guard for requestId
   -> worker processEvent()
   -> calculate risk delta from event reasons
   -> atomically add and clamp Redis risk score
   -> set Redis cooldown when score >= 80
   -> upsert MongoDB RiskProfile
+  -> update RequestEvent.riskScoreAfterWorker
 ```
 
 Risk updates are asynchronous. The next request from the same API key or IP sees the updated cached score.
+
+## Kafka Event Stream
+
+The gateway publishes each stored `RequestEvent` to Kafka topic `request-events`.
+Messages are keyed by `subject`, so authenticated abuse is grouped by API key
+and unauthenticated abuse is grouped by IP. The worker consumes the topic as
+consumer group `risk-worker`.
+
+On startup, the worker checks whether `request-events` exists and creates it if
+needed before subscribing. This avoids a cold-start race where the consumer
+subscribes before the producer has auto-created the topic.
+
+Why Kafka:
+
+- durable event stream
+- consumer group model
+- replayable events
+- partitioning by subject
+- better fit for event-driven systems than a simple job queue
+
+Tradeoffs:
+
+- more infrastructure than a Redis-backed queue
+- retries and backoff must be handled differently
+- duplicate delivery must be expected
+- lag must be monitored through offsets
 
 ## Data Stores
 
@@ -69,7 +98,12 @@ Redis:
 - Cooldown keys.
 - Cached risk scores.
 - User-agent sets.
-- BullMQ queue state.
+- Idempotency keys such as `processed:event:<requestId>`.
+
+Kafka:
+
+- Durable `request-events` stream.
+- Consumer group offsets for `risk-worker`.
 
 ## Auth Boundaries
 
@@ -89,8 +123,20 @@ x-admin-token: <ADMIN_TOKEN>
 
 ## Docker Startup
 
-`docker-compose.yml` starts MongoDB and Redis with health checks. Gateway and worker wait for healthy infrastructure before starting.
+`docker-compose.yml` starts MongoDB, Redis, and Kafka with health checks. Gateway and worker wait for healthy infrastructure before starting.
 
 Compose also runs a one-shot `seed` service that creates demo API keys before the gateway starts. This makes `docker compose up --build` enough for the replay scripts to authenticate with `demo-free-key`.
 
 The TypeScript services are built in their images and run compiled JavaScript with `npm run start`, not `tsx` dev mode. This avoids runtime dev-server behavior inside containers and makes shutdown cleaner.
+
+## Verified Local Behavior
+
+The Docker stack was exercised with curl against `127.0.0.1` only:
+
+- admin stats and queue endpoints returned `200`
+- missing and invalid API keys returned `401`
+- normal search returned `200 ALLOW`
+- checkout returned `201 ALLOW` until the checkout limit was exceeded
+- failed login events were written to MongoDB and later updated with `riskScoreAfterWorker`
+- a 120-request local search burst produced `30` allows, `18` rate limits, and `72` temporary blocks
+- Kafka `highWatermark` and `committedOffset` both reached `154`, with `totalLag: 0`

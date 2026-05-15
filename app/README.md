@@ -7,7 +7,7 @@ This directory contains the runnable monorepo for API is Alive.
 ```text
 apps/gateway     Express gateway and admin API
 apps/fake-api    Demo upstream API
-apps/worker      BullMQ risk scoring worker
+apps/worker      Kafka risk scoring consumer
 apps/dashboard   React dashboard backed by live admin endpoints
 apps/replay      Traffic replay scenarios
 packages/shared  Shared TypeScript types
@@ -35,7 +35,7 @@ Reset local Docker data:
 docker compose down -v
 ```
 
-Docker starts MongoDB and Redis with health checks. The gateway and worker wait for healthy infrastructure before starting.
+Docker starts MongoDB, Redis, and Kafka with health checks. The gateway and worker wait for healthy infrastructure before starting.
 
 ## Local Flow
 
@@ -100,7 +100,7 @@ npm run replay:suspicious
 npm test
 ```
 
-`npm test` uses `sentinel_test` and Redis DB `15` so it does not wipe the development or Docker queue state.
+`npm test` uses `sentinel_test` and Redis DB `15` so it does not wipe development data. Kafka integration is covered by the Docker demo/manual checks; the default unit/integration tests mock the gateway publisher.
 
 ## Useful Admin Calls
 
@@ -116,6 +116,48 @@ curl http://localhost:4000/admin/risk-profiles \
 
 curl http://localhost:4000/admin/queue \
   -H "x-admin-token: dev-admin-token"
+```
+
+## Local Curl Smoke Test
+
+Keep manual load checks on localhost:
+
+```bash
+curl -i "http://127.0.0.1:4000/search?q=keyboard" \
+  -H "x-api-key: demo-free-key"
+
+curl "http://127.0.0.1:4000/admin/queue" \
+  -H "x-admin-token: dev-admin-token"
+```
+
+A healthy Kafka path returns queue stats shaped like:
+
+```json
+{
+  "queue": "request-events",
+  "backend": "kafka",
+  "topic": "request-events",
+  "groupId": "risk-worker",
+  "totalLag": 0,
+  "partitions": [
+    {
+      "partition": 0,
+      "highWatermark": "154",
+      "committedOffset": "154",
+      "lag": 0
+    }
+  ]
+}
+```
+
+Validated localhost burst behavior:
+
+```text
+120 search requests with xargs -P 30:
+30 allowed
+18 rate-limited
+72 temp-blocked after async risk scoring caught up
+Kafka lag returned to 0
 ```
 
 See `docs/architecture.md` for the request path and service boundaries.

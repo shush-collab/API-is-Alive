@@ -6,7 +6,7 @@ export const adminRouter = Router();
 
 adminRouter.get("/stats", async (_req, res) => {
   const queue = await getQueueStats();
-  res.json({ ...(await mongo.stats()), queueLag: queue.waiting + queue.active + queue.delayed });
+  res.json({ ...(await mongo.stats()), queueLag: queue.totalLag });
 });
 
 adminRouter.get("/events", async (req, res) => {

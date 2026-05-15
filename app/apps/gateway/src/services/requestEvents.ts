@@ -49,7 +49,7 @@ export const storeAndEnqueueRequestEvent = async (event: RequestEvent) => {
   try {
     await enqueueRequestEvent(event);
   } catch (error) {
-    console.error("[gateway] failed to enqueue request event", {
+    console.error("[gateway] failed to publish request event", {
       requestId: event.requestId,
       error,
     });

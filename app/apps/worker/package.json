@@ -14,9 +14,9 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "bullmq": "^5.76.8",
     "dotenv": "^17.4.2",
     "ioredis": "^5.10.1",
+    "kafkajs": "^2.2.4",
     "mongoose": "^8.23.1"
   }
 }

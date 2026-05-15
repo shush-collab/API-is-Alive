@@ -2,6 +2,10 @@
 
 Risk scoring runs in the worker, not in the gateway request path.
 
+The worker receives request events from Kafka topic `request-events` as consumer
+group `risk-worker`. Each message is keyed by request subject, so events for the
+same API key or unauthenticated IP stay ordered within a partition.
+
 ## Decision Model
 
 The gateway reads the cached Redis risk score and maps it to a decision:
@@ -50,6 +54,21 @@ normal_behavior           -5
 ```
 
 The worker applies the delta with `redis.addClamped()`, which uses a Redis Lua script to atomically add the delta and clamp the score between `0` and `100`.
+
+Before applying the delta, the worker claims `processed:event:<requestId>` in
+Redis with `SET PX NX`. Duplicate Kafka deliveries are skipped so the same risk
+delta is not added twice.
+
+## Kafka Tradeoffs
+
+Kafka is used for the async request-event stream because it provides a durable
+event log, consumer groups, replayable events, and partitioning by subject. It
+is a better fit for event-driven risk scoring than a simple job queue.
+
+The tradeoff is operational complexity: Kafka adds infrastructure, retries and
+backoff are handled differently from job queues, duplicate delivery must be
+expected, and lag is monitored through topic high-watermark and consumer-group
+offsets.
 
 ## Cooldowns
 

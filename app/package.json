@@ -18,7 +18,7 @@
     "replay:credential-stuffing": "npm --workspace apps/replay run credential-stuffing",
     "replay:suspicious": "npm --workspace apps/replay run suspicious",
     "seed": "npm --workspace apps/gateway run seed",
-    "test": "MONGO_URL=mongodb://localhost:27017/sentinel_test REDIS_URL=redis://localhost:6379/15 tsx --test tests/*.test.ts"
+    "test": "MONGO_URL=mongodb://localhost:27017/sentinel_test REDIS_URL=redis://localhost:6379/15 tsx --test --test-concurrency=1 tests/*.test.ts"
   },
   "keywords": [
     "gateway",
@@ -27,11 +27,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bullmq": "^5.76.8",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ioredis": "^5.10.1",
+    "kafkajs": "^2.2.4",
     "mongoose": "^8.23.1"
   },
   "devDependencies": {
@@ -39,6 +39,7 @@
     "@types/express": "^5.0.6",
     "@types/ioredis": "^5.0.0",
     "@types/node": "^25.7.0",
+    "madge": "^8.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

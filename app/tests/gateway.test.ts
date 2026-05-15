@@ -5,19 +5,40 @@ import { createApp } from "../apps/gateway/src/app";
 import { config } from "../apps/gateway/src/config";
 import { ApiKeyModel } from "../apps/gateway/src/models/ApiKey";
 import { hashApiKey } from "../apps/gateway/src/services/apiKeys";
-import { requestEventsQueue } from "../apps/gateway/src/services/eventQueue";
+import { setEventPublisherForTests } from "../apps/gateway/src/services/eventQueue";
 import { connectMongo, disconnectMongo, mongo } from "../apps/gateway/src/services/mongo";
-import { getQueueStats } from "../apps/gateway/src/services/queueStats";
+import { setQueueStatsProviderForTests } from "../apps/gateway/src/services/queueStats";
 import { redis, redisClient } from "../apps/gateway/src/services/redis";
 import { resetSlidingWindows } from "../apps/gateway/src/services/slidingWindow";
 import { checkTokenBucket } from "../apps/gateway/src/services/tokenBucket";
 import { checkSlidingWindow } from "../apps/gateway/src/services/slidingWindow";
+import type { RequestEvent } from "../apps/gateway/src/types/shared";
+
+const publishedEvents: RequestEvent[] = [];
 
 const resetState = async () => {
   await redis.reset();
   await mongo.reset();
   await ApiKeyModel.deleteMany({});
-  await requestEventsQueue.obliterate({ force: true });
+  publishedEvents.length = 0;
+  setEventPublisherForTests(async (event) => {
+    publishedEvents.push(event);
+  });
+  setQueueStatsProviderForTests(async () => ({
+    queue: "request-events",
+    backend: "kafka",
+    topic: "request-events",
+    groupId: "risk-worker",
+    totalLag: publishedEvents.length,
+    partitions: [
+      {
+        partition: 0,
+        highWatermark: String(publishedEvents.length),
+        committedOffset: "0",
+        lag: publishedEvents.length,
+      },
+    ],
+  }));
   await resetSlidingWindows();
 };
 
@@ -123,7 +144,8 @@ beforeEach(async () => {
 
 after(async () => {
   await disconnectMongo();
-  await requestEventsQueue.close();
+  setEventPublisherForTests(null);
+  setQueueStatsProviderForTests(null);
   redisClient.disconnect();
 });
 
@@ -289,13 +311,13 @@ test("checkout limit returns RATE_LIMIT on sixth attempt", async () => {
   }
 });
 
-test("request event is pushed to queue", async () => {
+test("request event is published to kafka transport", async () => {
   const fake = await startFakeApi();
   const gateway = await startGateway(fake.url);
   try {
     await request(gateway.url, "/search?q=keyboard");
-    const stats = await getQueueStats();
-    assert.equal(stats.waiting + stats.active + stats.delayed + stats.completed + stats.failed, 1);
+    assert.equal(publishedEvents.length, 1);
+    assert.equal(publishedEvents[0]?.subject, "test-key");
   } finally {
     await closeServer(gateway.server);
     await closeServer(fake.server);

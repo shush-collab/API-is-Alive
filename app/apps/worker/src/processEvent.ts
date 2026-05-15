@@ -6,6 +6,16 @@ import { redis } from "./services/redis";
 import type { RequestEvent, RiskProfile } from "../../../packages/shared/src/types";
 
 export const processEvent = async (event: RequestEvent) => {
+  const processedKey = `processed:event:${event.requestId}`;
+  const claimed = await redis.setIfNotExists(processedKey, 1, 24 * 60 * 60 * 1000);
+
+  if (!claimed) {
+    console.log("[worker] duplicate event skipped", {
+      requestId: event.requestId,
+    });
+    return;
+  }
+
   const riskKey = event.subjectType === "apiKey" ? `risk:key:${event.subject}` : `risk:ip:${event.subject}`;
   const cooldownKey = event.subjectType === "apiKey" ? `cooldown:key:${event.subject}` : `cooldown:ip:${event.subject}`;
 

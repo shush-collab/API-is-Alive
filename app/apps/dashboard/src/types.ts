@@ -46,9 +46,14 @@ export type RiskProfile = {
 
 export type QueueStats = {
   queue: string;
-  waiting: number;
-  active: number;
-  completed: number;
-  failed: number;
-  delayed: number;
+  backend: "kafka";
+  topic: string;
+  groupId: string;
+  totalLag: number;
+  partitions: {
+    partition: number;
+    highWatermark: string;
+    committedOffset: string;
+    lag: number;
+  }[];
 };
